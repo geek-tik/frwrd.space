@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Forward — проброс портов для разработчиков. Одна команда — публичная HTTPS-ссылка на localhost." />
+  <title>Forward — проброс портов для разработчиков</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="container header__inner">
+      <a class="logo" href="/">
+        <span class="material-icons logo__icon">forward</span>
+        Forward
+      </a>
+      <nav class="nav">
+        <a href="#features">Возможности</a>
+        <a href="#start">Быстрый старт</a>
+        <a href="#how">Как это работает</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container hero__inner">
+        <p class="hero__badge">Публичный HTTPS на localhost за одну команду</p>
+        <h1>Одна команда —<br />публичная HTTPS-ссылка</h1>
+        <p class="hero__lead">
+          Пробросьте локальный сервер в интернет за 30 секунд.
+          Webhooks, демо коллегам, OAuth callbacks — без открытия портов на роутере.
+        </p>
+        <div class="hero__actions">
+          <a class="btn btn--primary" href="#start">
+            <span class="material-icons">rocket_launch</span>
+            Начать
+          </a>
+          <a class="btn btn--outlined" href="https://github.com" target="_blank" rel="noopener">
+            <span class="material-icons">code</span>
+            Документация
+          </a>
+        </div>
+        <div class="hero__terminal card">
+          <div class="terminal__bar">
+            <span></span><span></span><span></span>
+          </div>
+          <pre><code>$ forward http 3000
+<span class="terminal__ok">→ https://k7m2xq.frwrd.space</span></code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="status" id="status" hidden>
+      <div class="container">
+        <div class="status__card card">
+          <span class="material-icons status__dot">circle</span>
+          <span id="status-text">Сервис доступен</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="features">
+      <div class="container">
+        <h2>Возможности</h2>
+        <p class="section__lead">Всё необходимое для локальной разработки — без лишней сложности.</p>
+        <div class="grid grid--3">
+          <article class="card feature">
+            <span class="material-icons feature__icon">link</span>
+            <h3>HTTP/HTTPS туннели</h3>
+            <p>Публичный URL на ваш localhost. Автоматический HTTPS-сертификат на поддомене.</p>
+          </article>
+          <article class="card feature">
+            <span class="material-icons feature__icon">terminal</span>
+            <h3>Одна команда</h3>
+            <p><code>forward http 3000</code> — и туннель готов. Агент сам подключается к серверу через порт 443.</p>
+          </article>
+          <article class="card feature">
+            <span class="material-icons feature__icon">visibility</span>
+            <h3>Инспектор трафика</h3>
+            <p>Смотрите все HTTP-запросы и ответы в веб-интерфейсе. Удобно для отладки webhooks.</p>
+          </article>
+          <article class="card feature">
+            <span class="material-icons feature__icon">lock</span>
+            <h3>Без входящих портов</h3>
+            <p>Агент инициирует исходящее соединение. Работает за NAT, в офисе и дома.</p>
+          </article>
+          <article class="card feature">
+            <span class="material-icons feature__icon">dns</span>
+            <h3>Случайные поддомены</h3>
+            <p>Каждый туннель получает уникальный адрес вида <code>abc123.frwrd.space</code>.</p>
+          </article>
+          <article class="card feature">
+            <span class="material-icons feature__icon">cloud</span>
+            <h3>Docker из коробки</h3>
+            <p>Весь стек в контейнерах — одинаково на машине разработчика и на сервере.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--alt" id="start">
+      <div class="container">
+        <h2>Быстрый старт</h2>
+        <p class="section__lead">Три шага до публичной ссылки на ваш локальный сервер.</p>
+
+        <ol class="steps">
+          <li class="card step">
+            <span class="step__num">1</span>
+            <div>
+              <h3>Запустите стек</h3>
+              <p>Скопируйте конфиг и поднимите сервисы:</p>
+              <div class="code-block">
+                <pre><code id="code-up">cp .env.example .env
+make up</code></pre>
+                <button class="btn btn--icon copy-btn" data-target="code-up" title="Копировать">
+                  <span class="material-icons">content_copy</span>
+                </button>
+              </div>
+            </div>
+          </li>
+          <li class="card step">
+            <span class="step__num">2</span>
+            <div>
+              <h3>Запустите локальный сервер</h3>
+              <p>Например, ваше приложение на порту 3000:</p>
+              <div class="code-block">
+                <pre><code id="code-dev">npm run dev
+# или любой сервер на localhost:3000</code></pre>
+                <button class="btn btn--icon copy-btn" data-target="code-dev" title="Копировать">
+                  <span class="material-icons">content_copy</span>
+                </button>
+              </div>
+            </div>
+          </li>
+          <li class="card step">
+            <span class="step__num">3</span>
+            <div>
+              <h3>Откройте туннель</h3>
+              <p>Агент в Docker пробросит порт с хоста:</p>
+              <div class="code-block">
+                <pre><code id="code-tunnel">make tunnel PORT=3000
+# → https://xxxx.frwrd.space</code></pre>
+                <button class="btn btn--icon copy-btn" data-target="code-tunnel" title="Копировать">
+                  <span class="material-icons">content_copy</span>
+                </button>
+              </div>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section" id="how">
+      <div class="container">
+        <h2>Как это работает</h2>
+        <div class="card flow">
+          <div class="flow__row">
+            <div class="flow__item">
+              <span class="material-icons">computer</span>
+              <strong>Ваш компьютер</strong>
+              <span>localhost:3000</span>
+            </div>
+            <span class="material-icons flow__arrow">arrow_forward</span>
+            <div class="flow__item">
+              <span class="material-icons">hub</span>
+              <strong>Агент Forward</strong>
+              <span>исходящее TLS</span>
+            </div>
+            <span class="material-icons flow__arrow">arrow_forward</span>
+            <div class="flow__item">
+              <span class="material-icons">cloud</span>
+              <strong>Облачный шлюз</strong>
+              <span>*.frwrd.space</span>
+            </div>
+            <span class="material-icons flow__arrow">arrow_forward</span>
+            <div class="flow__item">
+              <span class="material-icons">public</span>
+              <strong>Интернет</strong>
+              <span>webhooks, клиенты</span>
+            </div>
+          </div>
+          <p class="flow__note">
+            Агент на вашей машине сам подключается к серверу. Входящие порты на роутере открывать не нужно.
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer__inner">
+      <span>Forward · frwrd.space</span>
+      <span id="version"></span>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>
