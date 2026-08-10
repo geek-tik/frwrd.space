@@ -135,6 +135,7 @@ migrations/     — SQL
 | Файл | Назначение |
 |------|------------|
 | [docs/vision.md](./docs/vision.md) | Видение продукта (живой документ команды) |
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | Правила участия, ветки, PR |
 | [README.md](./README.md) | Эксплуатация, quickstart |
 | [deploy/SERVER_SETUP.md](./deploy/SERVER_SETUP.md) | Деплой и обновление сервера |
 | [RESEARCH.md](./RESEARCH.md) | Исследование (архив, этап проектирования) |
