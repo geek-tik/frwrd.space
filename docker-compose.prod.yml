@@ -1,0 +1,5 @@
+# Prod on VPS: данные Postgres на диске хоста
+services:
+  postgres:
+    volumes:
+      - ${DATA_PATH}/postgres:/var/lib/postgresql/data

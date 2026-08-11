@@ -18,6 +18,7 @@ services:
     build:
       context: .
       dockerfile: deploy/docker/server.Dockerfile
+    image: ${IMAGE_PREFIX:-forward}-server:${IMAGE_TAG:-latest}
     entrypoint: ["/app/migrate"]
     command: ["up"]
     environment:
@@ -32,6 +33,7 @@ services:
     build:
       context: .
       dockerfile: deploy/docker/server.Dockerfile
+    image: ${IMAGE_PREFIX:-forward}-server:${IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file:
       - .env
@@ -42,6 +44,7 @@ services:
       EDGE_ADDR: ${EDGE_ADDR:-:8081}
       AGENT_ADDR: ${AGENT_ADDR:-:8082}
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      SECURE_COOKIES: ${SECURE_COOKIES:-false}
     ports:
       - "${FORWARD_BIND:-127.0.0.1}:8080:8080"
       - "${FORWARD_BIND:-127.0.0.1}:8081:8081"
@@ -59,6 +62,7 @@ services:
     build:
       context: .
       dockerfile: deploy/docker/web.Dockerfile
+    image: ${IMAGE_PREFIX:-forward}-web:${IMAGE_TAG:-latest}
     restart: unless-stopped
     ports:
       - "${FORWARD_BIND:-127.0.0.1}:${WEB_PORT:-3080}:80"
@@ -70,6 +74,7 @@ services:
     build:
       context: .
       dockerfile: deploy/docker/agent.Dockerfile
+    image: ${IMAGE_PREFIX:-forward}-agent:${IMAGE_TAG:-latest}
     profiles:
       - tunnel
     extra_hosts:

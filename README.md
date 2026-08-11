@@ -84,12 +84,12 @@ docker compose --profile tunnel run --rm agent http 3000
 
 Кратко:
 
-- Каталог `/var/www/forward`, пользователь `forward`, GitHub deploy key
-- `docker compose up -d --build`
-- nginx: bootstrap → certbot DNS → `host.conf.example`
-- Порты API/edge/agent и dashboard только на `127.0.0.1`
-- До публичного запуска: basic auth на dashboard и API (см. SERVER_SETUP)
-- Редиректы: http→https, www→без www
+- пользователь `forward-prod`, каталоги из Variables `SERVER_PATH` и `DATA_PATH`
+- выкладка через GitHub Actions: образы собираются на runner, на сервере `docker load` и `compose up -d`
+- на сервере нет git clone и нет `compose --build`
+- порты приложения на `127.0.0.1`, снаружи nginx
+- TLS (DNS wildcard) и при необходимости basic auth на dashboard/API — см. SERVER_SETUP
+- редиректы http→https, www→apex
 
 Nginx проксирует:
 

@@ -1,0 +1,134 @@
+name: Deploy Prod
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    environment: prod
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+
+      - name: Resolve image tag
+        id: meta
+        run: |
+          TAG="${{ vars.IMAGE_TAG }}"
+          if [ -z "$TAG" ] || [ "$TAG" = "latest" ]; then
+            TAG="$(echo '${{ github.sha }}' | cut -c1-12)"
+          fi
+          PREFIX="${{ vars.IMAGE_PREFIX }}"
+          if [ -z "$PREFIX" ]; then
+            PREFIX=forward
+          fi
+          {
+            echo "tag=${TAG}"
+            echo "prefix=${PREFIX}"
+            echo "server=${PREFIX}-server:${TAG}"
+            echo "web=${PREFIX}-web:${TAG}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build images on runner
+        run: |
+          docker build -f deploy/docker/server.Dockerfile -t "${{ steps.meta.outputs.server }}" .
+          docker build -f deploy/docker/web.Dockerfile -t "${{ steps.meta.outputs.web }}" .
+
+      - name: Save images
+        run: |
+          docker save \
+            "${{ steps.meta.outputs.server }}" \
+            "${{ steps.meta.outputs.web }}" \
+            | gzip > /tmp/forward-images.tar.gz
+          ls -lh /tmp/forward-images.tar.gz
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ vars.SERVER_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Sync files to server
+        run: |
+          rsync -avz --delete --exclude-from=deploy-rsync-excludes.txt \
+            -e "ssh -o StrictHostKeyChecking=no" \
+            ./ "${{ vars.SERVER_USER }}@${{ vars.SERVER_HOST }}:${{ vars.SERVER_PATH }}/"
+
+      - name: Upload images
+        run: |
+          scp -o StrictHostKeyChecking=no /tmp/forward-images.tar.gz \
+            "${{ vars.SERVER_USER }}@${{ vars.SERVER_HOST }}:${{ vars.SERVER_PATH }}/forward-images.tar.gz"
+
+      - name: Write .env and start stack
+        env:
+          IMAGE_PREFIX: ${{ steps.meta.outputs.prefix }}
+          IMAGE_TAG: ${{ steps.meta.outputs.tag }}
+          COMPOSE_PROJECT_NAME: ${{ vars.COMPOSE_PROJECT_NAME }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          BASE_DOMAIN: ${{ vars.BASE_DOMAIN }}
+          WEB_PORT: ${{ vars.WEB_PORT }}
+          DATA_PATH: ${{ vars.DATA_PATH }}
+        run: |
+          : "${COMPOSE_PROJECT_NAME:=forward-prod}"
+          : "${BASE_DOMAIN:=frwrd.space}"
+          ENV_FILE="$(mktemp)"
+          bash scripts/vps-write-deploy-env.sh "$ENV_FILE"
+          scp -o StrictHostKeyChecking=no "$ENV_FILE" \
+            "${{ vars.SERVER_USER }}@${{ vars.SERVER_HOST }}:${{ vars.SERVER_PATH }}/.env"
+          rm -f "$ENV_FILE"
+          ssh -o StrictHostKeyChecking=no "${{ vars.SERVER_USER }}@${{ vars.SERVER_HOST }}" bash << EOF
+          set -euo pipefail
+          cd "${{ vars.SERVER_PATH }}"
+          chmod 600 .env
+          mkdir -p "${{ vars.DATA_PATH }}/postgres"
+          gunzip -c forward-images.tar.gz | docker load
+          rm -f forward-images.tar.gz
+          export COMPOSE_PROJECT_NAME="${{ vars.COMPOSE_PROJECT_NAME }}"
+          docker compose \
+            -p "\${COMPOSE_PROJECT_NAME}" \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            up -d --remove-orphans
+          docker image prune -f
+          EOF
+
+      - name: Health check
+        run: |
+          ok=0
+          for _ in $(seq 1 30); do
+            if ssh -o StrictHostKeyChecking=no \
+              "${{ vars.SERVER_USER }}@${{ vars.SERVER_HOST }}" \
+              "curl -fsS http://127.0.0.1:8080/health"; then
+              ok=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "Health check failed: http://127.0.0.1:8080/health"
+            exit 1
+          fi
