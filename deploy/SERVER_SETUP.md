@@ -117,21 +117,21 @@ certbot certonly --manual --preferred-challenges dns \
   -d frwrd.space -d '*.frwrd.space'
 ```
 
-Примеры: `deploy/nginx/host.bootstrap.conf.example` (до сертификата), `deploy/nginx/host.conf.example` (после). В `proxy_pass` dashboard указать `WEB_PORT`.
+Актуальный конфиг: [`deploy/nginx/forward.conf`](./nginx/forward.conf) → `/etc/nginx/sites-available/forward`.
 
 ```bash
-cp /path/to/host.conf.example /etc/nginx/sites-available/forward
+cp deploy/nginx/forward.conf /etc/nginx/sites-available/forward
 ln -sf /etc/nginx/sites-available/forward /etc/nginx/sites-enabled/forward
 nginx -t && systemctl reload nginx
 ```
 
-Конфиг nginx на сервер копируется отдельно от compose-выкладки.
+Конфиг nginx на сервер копируется отдельно от compose-выкладки. Изменения в проде копируйте обратно в `deploy/nginx/forward.conf`.
 
 ---
 
-## 6. Ограничение регистраций (basic auth)
+## 6. Ограничение доступа (basic auth)
 
-Пока регистрация не открыта: basic auth на `frwrd.space` и `api.frwrd.space`. На `connect.` и `*.` не включать.
+В `forward.conf` basic auth уже на `frwrd.space`. Файл паролей на сервере:
 
 ```bash
 sudo apt-get install -y apache2-utils
@@ -139,16 +139,6 @@ sudo mkdir -p /etc/nginx/htpasswd
 sudo htpasswd -c /etc/nginx/htpasswd/forward team
 sudo chmod 640 /etc/nginx/htpasswd/forward
 sudo chown root:www-data /etc/nginx/htpasswd/forward
-```
-
-В `server` для dashboard и API (см. `host.conf.example`):
-
-```nginx
-auth_basic           "Forward private";
-auth_basic_user_file /etc/nginx/htpasswd/forward;
-```
-
-```bash
 nginx -t && systemctl reload nginx
 ```
 
@@ -179,4 +169,4 @@ docker compose --profile tunnel run --rm agent http 3000
 | Данные | `DATA_PATH` |
 | SSH CI | `/home/forward-prod/.ssh/authorized_keys` |
 | htpasswd | `/etc/nginx/htpasswd/forward` |
-| nginx | `/etc/nginx/sites-available/forward` |
+| nginx | `deploy/nginx/forward.conf` → `/etc/nginx/sites-available/forward` |

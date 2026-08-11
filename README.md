@@ -88,7 +88,7 @@ docker compose --profile tunnel run --rm agent http 3000
 - выкладка через GitHub Actions: образы собираются на runner, на сервере `docker load` и `compose up -d`
 - на сервере нет git clone и нет `compose --build`
 - порты приложения на `127.0.0.1`, снаружи nginx
-- TLS (DNS wildcard) и при необходимости basic auth на dashboard/API — см. SERVER_SETUP
+- TLS (DNS wildcard) и при необходимости basic auth на dashboard — см. SERVER_SETUP
 - редиректы http→https, www→apex
 
 Nginx проксирует:
