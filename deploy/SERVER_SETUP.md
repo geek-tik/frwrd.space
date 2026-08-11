@@ -156,10 +156,10 @@ nginx -t && systemctl reload nginx
 FORWARD_API_TOKEN=fwd_... \
 FORWARD_SERVER_URL=wss://connect.frwrd.space/agent/connect \
 FORWARD_DASHBOARD_URL=https://frwrd.space \
-docker compose --profile tunnel run --rm agent http 3000
+docker compose --profile tunnel run --no-deps --rm agent http 3000
 ```
 
-
+`--no-deps` — только контейнер агента, без локального postgres/server.  
 
 ---
 

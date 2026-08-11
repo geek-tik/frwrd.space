@@ -68,7 +68,7 @@ export function TokensPage() {
 
       <form className="card form inline" onSubmit={onCreate}>
         <label>
-          Название
+          <span>Название</span>
           <input value={name} onChange={(e) => setName(e.target.value)} required />
         </label>
         <button type="submit" disabled={pending}>
@@ -113,11 +113,19 @@ export function TokensPage() {
 
       <section className="card muted">
         <h2>Запуск агента</h2>
-        <pre>{`# добавьте в .env
-FORWARD_API_TOKEN=fwd_...
+        <pre>{String.raw`# локальный сервис уже слушает :3000
+FORWARD_API_TOKEN=fwd_... \
+FORWARD_SERVER_URL=wss://connect.frwrd.space/agent/connect \
+FORWARD_DASHBOARD_URL=https://frwrd.space \
+docker compose --profile tunnel run --no-deps --rm agent http 3000`}</pre>
+      </section>
 
-docker compose --profile tunnel run --rm agent http 3000
-docker compose --profile tunnel run --rm agent auth verify`}</pre>
+      <section className="card muted">
+        <h2>Проверка токена</h2>
+        <p className="muted">Без туннеля — только проверить, что FORWARD_API_TOKEN принимается сервером.</p>
+        <pre>{String.raw`FORWARD_API_TOKEN=fwd_... \
+FORWARD_SERVER_URL=wss://connect.frwrd.space/agent/connect \
+docker compose --profile tunnel run --no-deps --rm agent auth verify`}</pre>
       </section>
     </main>
   );

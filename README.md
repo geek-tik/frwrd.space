@@ -65,13 +65,13 @@ FORWARD_API_TOKEN=fwd_... FORWARD_LOCAL_HOST=demo-app \
 1. Зарегистрируйтесь на https://frwrd.space
 2. Создайте API token в dashboard
 3. **Запустите локальный сервис** на нужном порту
-4. Запустите агент:
+4. Запустите агент (`--no-deps` — без локального postgres/server):
 
 ```bash
 FORWARD_API_TOKEN=fwd_... \
 FORWARD_SERVER_URL=wss://connect.frwrd.space/agent/connect \
 FORWARD_DASHBOARD_URL=https://frwrd.space \
-docker compose --profile tunnel run --rm agent http 3000
+docker compose --profile tunnel run --no-deps --rm agent http 3000
 ```
 
 Публичный URL вида `https://<subdomain>.frwrd.space`. Запросы — в инспекторе на dashboard.
