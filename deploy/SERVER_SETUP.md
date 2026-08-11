@@ -131,7 +131,7 @@ nginx -t && systemctl reload nginx
 
 ## 6. Ограничение доступа (basic auth)
 
-В `forward.conf` basic auth уже на `frwrd.space`. Файл паролей на сервере:
+Файл паролей на сервере:
 
 ```bash
 sudo apt-get install -y apache2-utils
@@ -159,7 +159,7 @@ FORWARD_DASHBOARD_URL=https://frwrd.space \
 docker compose --profile tunnel run --rm agent http 3000
 ```
 
-При basic auth на dashboard сначала войти в браузере, создать token. Агенту basic auth не передаётся.
+
 
 ---
 

@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 
 export function LoginPage() {
@@ -52,7 +52,7 @@ export function LoginPage() {
         </button>
       </form>
       <p className="hint">
-        Нет аккаунта? <Link to="/register">Зарегистрироваться</Link>
+        Нет аккаунта? <a href="/register">Зарегистрироваться</a>
       </p>
     </main>
   );
