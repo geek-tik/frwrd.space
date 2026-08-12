@@ -32,6 +32,19 @@ curl http://localhost:8080/health
 open http://localhost:3080
 ```
 
+Для разработки dashboard через Vite на хосте запустите backend и dev-сервер отдельно:
+
+```bash
+docker compose up -d postgres migrate server
+cd web
+npm install
+npm run dev
+```
+
+Vite откроет dashboard на `http://localhost:5173` и проксирует `/api` на
+`http://localhost:8080`. Другой backend можно указать через
+`VITE_API_PROXY_TARGET`.
+
 ### Туннель (локальный сервер)
 
 **Сначала** запустите сервис на порту, **потом** агент:
