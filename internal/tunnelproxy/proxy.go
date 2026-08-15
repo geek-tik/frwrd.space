@@ -135,13 +135,13 @@ func ProxyToSession(w http.ResponseWriter, r *http.Request, openStream func() (n
 	// MaxBodyBytes. Так Content-Length остаётся согласован с реальным ответом.
 	respCapture := newLimitedCapture(inspector.MaxBodyBytes)
 
-	for k, values := range resp.Header {
-		for _, v := range values {
-			w.Header().Add(k, v)
-		}
-	}
+	copyHopSafeHeaders(w.Header(), resp.Header)
+	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(resp.StatusCode)
-	_, _ = io.Copy(w, io.TeeReader(resp.Body, respCapture))
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+	_, _ = io.Copy(newFlushWriter(w), io.TeeReader(resp.Body, respCapture))
 
 	if onComplete != nil {
 		onComplete(inspector.Captured{
@@ -201,6 +201,55 @@ func proxyUpgrade(
 		&bufferedConn{Conn: clientConn, reader: clientRW.Reader},
 		&bufferedConn{Conn: stream, reader: streamReader},
 	)
+}
+
+func copyHopSafeHeaders(dst, src http.Header) {
+	skip := map[string]struct{}{
+		"Connection":          {},
+		"Keep-Alive":          {},
+		"Proxy-Authenticate":  {},
+		"Proxy-Authorization": {},
+		"Proxy-Connection":    {},
+		"Te":                  {},
+		"Trailers":            {},
+		"Transfer-Encoding":   {},
+		"Upgrade":             {},
+	}
+	for _, extra := range src.Values("Connection") {
+		for _, v := range strings.Split(extra, ",") {
+			k := http.CanonicalHeaderKey(strings.TrimSpace(v))
+			if k != "" {
+				skip[k] = struct{}{}
+			}
+		}
+	}
+	for k, values := range src {
+		if _, found := skip[k]; found {
+			continue
+		}
+		for _, v := range values {
+			dst.Add(k, v)
+		}
+	}
+}
+
+type flushWriter struct {
+	w http.ResponseWriter
+	f http.Flusher
+}
+
+func newFlushWriter(w http.ResponseWriter) io.Writer {
+	f, ok := w.(http.Flusher)
+	if !ok {
+		return w
+	}
+	return &flushWriter{w: w, f: f}
+}
+
+func (fw *flushWriter) Write(p []byte) (int, error) {
+	n, err := fw.w.Write(p)
+	fw.f.Flush()
+	return n, err
 }
 
 func writeResponseHead(w io.Writer, resp *http.Response) error {
