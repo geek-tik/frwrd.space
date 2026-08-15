@@ -2,7 +2,6 @@ package tunnelproxy
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -56,6 +55,24 @@ func ServeStream(stream net.Conn, localHost string, localPort int) error {
 	}
 	defer resp.Body.Close()
 
+	// После HTTP 101 тело ответа становится двунаправленным соединением.
+	// Обычный resp.Write записал бы только handshake и сразу закрыл stream,
+	// поэтому дальше связываем yamux stream напрямую с локальным WebSocket.
+	if resp.StatusCode == http.StatusSwitchingProtocols {
+		upstream, ok := resp.Body.(io.ReadWriteCloser)
+		if !ok {
+			return fmt.Errorf("upgrade response body is not writable")
+		}
+		if err := writeResponseHead(stream, resp); err != nil {
+			return fmt.Errorf("write upgrade response: %w", err)
+		}
+
+		return bridge(
+			&bufferedConn{Conn: stream, reader: br},
+			upstream,
+		)
+	}
+
 	if err := resp.Write(stream); err != nil {
 		return fmt.Errorf("write response: %w", err)
 	}
@@ -65,12 +82,15 @@ func ServeStream(stream net.Conn, localHost string, localPort int) error {
 func ProxyToSession(w http.ResponseWriter, r *http.Request, openStream func() (net.Conn, error), onComplete func(inspector.Captured)) {
 	start := time.Now()
 
-	reqBody, err := readBodyLimited(r.Body, inspector.MaxBodyBytes)
-	if err != nil {
-		http.Error(w, "ошибка чтения запроса", http.StatusBadRequest)
-		return
+	// В туннель передаётся всё тело запроса. Инспектор параллельно сохраняет
+	// только ограниченный префикс, чтобы большие upload'ы не обрезались.
+	reqCapture := newLimitedCapture(inspector.MaxBodyBytes)
+	if r.Body != nil {
+		r.Body = &teeReadCloser{
+			Reader: io.TeeReader(r.Body, reqCapture),
+			Closer: r.Body,
+		}
 	}
-	r.Body = io.NopCloser(bytes.NewReader(reqBody))
 
 	stream, err := openStream()
 	if err != nil {
@@ -103,13 +123,17 @@ func ProxyToSession(w http.ResponseWriter, r *http.Request, openStream func() (n
 	}
 	defer stream.Close()
 
-	respBody, err := readBodyLimited(resp.Body, inspector.MaxBodyBytes)
-	if err != nil {
-		resp.Body.Close()
-		http.Error(w, "ошибка чтения ответа", http.StatusBadGateway)
+	// При Upgrade net/http больше не должен управлять соединением: передаём
+	// клиенту handshake и переключаем обе стороны в raw duplex-режим.
+	if resp.StatusCode == http.StatusSwitchingProtocols {
+		proxyUpgrade(w, r, stream, br, resp, start, reqCapture.Bytes(), onComplete)
 		return
 	}
-	resp.Body = io.NopCloser(bytes.NewReader(respBody))
+	defer resp.Body.Close()
+
+	// Полный ответ потоково уходит клиенту, а инспектор получает не больше
+	// MaxBodyBytes. Так Content-Length остаётся согласован с реальным ответом.
+	respCapture := newLimitedCapture(inspector.MaxBodyBytes)
 
 	for k, values := range resp.Header {
 		for _, v := range values {
@@ -117,7 +141,48 @@ func ProxyToSession(w http.ResponseWriter, r *http.Request, openStream func() (n
 		}
 	}
 	w.WriteHeader(resp.StatusCode)
-	_, _ = io.Copy(w, resp.Body)
+	_, _ = io.Copy(w, io.TeeReader(resp.Body, respCapture))
+
+	if onComplete != nil {
+		onComplete(inspector.Captured{
+			Method:      r.Method,
+			Path:        r.URL.Path,
+			Query:       r.URL.RawQuery,
+			Headers:     r.Header.Clone(),
+			Body:        reqCapture.Bytes(),
+			StatusCode:  resp.StatusCode,
+			RespHeaders: resp.Header.Clone(),
+			RespBody:    respCapture.Bytes(),
+			Duration:    time.Since(start),
+		})
+	}
+}
+
+func proxyUpgrade(
+	w http.ResponseWriter,
+	r *http.Request,
+	stream net.Conn,
+	streamReader *bufio.Reader,
+	resp *http.Response,
+	start time.Time,
+	reqBody []byte,
+	onComplete func(inspector.Captured),
+) {
+	// Забираем TCP-соединение у HTTP-сервера после получения 101 от агента.
+	clientConn, clientRW, err := http.NewResponseController(w).Hijack()
+	if err != nil {
+		http.Error(w, "WebSocket upgrade не поддерживается", http.StatusInternalServerError)
+		return
+	}
+
+	if err := writeResponseHead(clientRW.Writer, resp); err != nil {
+		clientConn.Close()
+		return
+	}
+	if err := clientRW.Flush(); err != nil {
+		clientConn.Close()
+		return
+	}
 
 	if onComplete != nil {
 		onComplete(inspector.Captured{
@@ -128,25 +193,95 @@ func ProxyToSession(w http.ResponseWriter, r *http.Request, openStream func() (n
 			Body:        reqBody,
 			StatusCode:  resp.StatusCode,
 			RespHeaders: resp.Header.Clone(),
-			RespBody:    respBody,
 			Duration:    time.Since(start),
 		})
 	}
+
+	_ = bridge(
+		&bufferedConn{Conn: clientConn, reader: clientRW.Reader},
+		&bufferedConn{Conn: stream, reader: streamReader},
+	)
 }
 
-func readBodyLimited(body io.ReadCloser, limit int64) ([]byte, error) {
-	if body == nil {
-		return nil, nil
+func writeResponseHead(w io.Writer, resp *http.Response) error {
+	proto := resp.Proto
+	if proto == "" {
+		proto = "HTTP/1.1"
 	}
-	defer body.Close()
-	data, err := io.ReadAll(io.LimitReader(body, limit+1))
-	if err != nil {
-		return nil, err
+	status := resp.Status
+	if status == "" {
+		status = fmt.Sprintf("%d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
-	if int64(len(data)) > limit {
-		return data[:limit], nil
+
+	if _, err := fmt.Fprintf(w, "%s %s\r\n", proto, status); err != nil {
+		return err
 	}
-	return data, nil
+	if err := resp.Header.Write(w); err != nil {
+		return err
+	}
+	_, err := io.WriteString(w, "\r\n")
+	return err
+}
+
+func bridge(a, b io.ReadWriteCloser) error {
+	// WebSocket должен одновременно передавать сообщения в обоих направлениях.
+	// Завершение любой стороны закрывает обе и разблокирует второй io.Copy.
+	errCh := make(chan error, 2)
+	go func() {
+		_, err := io.Copy(a, b)
+		errCh <- err
+	}()
+	go func() {
+		_, err := io.Copy(b, a)
+		errCh <- err
+	}()
+
+	err := <-errCh
+	_ = a.Close()
+	_ = b.Close()
+	return err
+}
+
+type bufferedConn struct {
+	net.Conn
+	reader io.Reader
+}
+
+func (c *bufferedConn) Read(p []byte) (int, error) {
+	// Сначала возвращаем байты, которые bufio.Reader успел прочитать сверх
+	// HTTP-заголовков; иначе начало первого WebSocket frame могло бы потеряться.
+	return c.reader.Read(p)
+}
+
+type teeReadCloser struct {
+	io.Reader
+	io.Closer
+}
+
+type limitedCapture struct {
+	limit int
+	data  []byte
+}
+
+func newLimitedCapture(limit int64) *limitedCapture {
+	return &limitedCapture{limit: int(limit)}
+}
+
+func (c *limitedCapture) Write(p []byte) (int, error) {
+	// Для вызывающего TeeReader считаем принятым весь p, хотя сохраняем только
+	// префикс: лимит относится к инспектору, а не к проксируемому трафику.
+	remaining := c.limit - len(c.data)
+	if remaining > 0 {
+		if remaining > len(p) {
+			remaining = len(p)
+		}
+		c.data = append(c.data, p[:remaining]...)
+	}
+	return len(p), nil
+}
+
+func (c *limitedCapture) Bytes() []byte {
+	return c.data
 }
 
 func writeErrorResponse(w io.Writer, code int, err error) error {
